@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heidenhain TNC 640 Post-Processor Guide (TARUS)</title>
+    <!-- 
+      DEVELOPER NOTE:
+      This guide is built strictly from user-supplied documentation and production files for the Heidenhain TNC 640.
+      
+      UPDATES:
+      - Temporarily locked/disabled DHDM and UNIMAX tabs while under construction.
+      - Added explicit INCH vs MM unit toggle instructions to all File Structure sections.
+      - Defaulted all program examples to INCH format per user request.
+      - Removed leftover ISO "No Plane Command" artifacts from Fork Head tabs; accurately defined M128 (Simultaneous) vs PLANE SPATIAL (3+2) logic.
+      - Injected M126 (Shortest Path) into rotational sequence examples to match shop floor files.
+    -->
+    <style>
+        /* General Page & Print Styling */
+        @page {
+            size: letter;
+            margin: 2.5cm 2cm;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Header and Footer */
+        .page-header, .page-footer {
+            background-color: #000000;
+            color: #ffffff;
+            padding: 20px 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100px;
+            border-bottom: 5px solid #84BD00; 
+        }
+        
+        .header-title {
+            font-size: 2.4em;
+            font-weight: 700;
+            margin: 0;
+            z-index: 2;
+            letter-spacing: 0.5px;
+        }
+        
+        .header-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 160px;
+            opacity: 0.3; 
+            z-index: 1;
+        }
+
+        .page-footer {
+            margin-top: 30px;
+            font-size: 0.9em;
+            color: #ccc;
+            background-color: #1a1a1a; 
+            border-top: 3px solid #84BD00;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 950px;
+            margin: 40px auto;
+            background-color: #ffffff;
+            padding: 50px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border-radius: 4px;
+        }
+
+        /* Tab Navigation (Main Level) */
+        .tab-nav {
+            border-bottom: 3px solid #84BD00;
+            padding-bottom: 0;
+            margin-bottom: 35px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        
+        .tab-button {
+            padding: 14px 25px;
+            cursor: pointer;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            font-size: 15px;
+            font-weight: bold;
+            color: #555;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tab-button:hover:not([disabled]),
+        .tab-button:focus:not([disabled]) {
+            background-color: #e5e5e5;
+            color: #000;
+            outline: none;
+        }
+        
+        .tab-button[aria-selected="true"] {
+            background-color: #ffffff;
+            border-color: #84BD00;
+            border-width: 3px 3px 0 3px; 
+            border-bottom: 3px solid #ffffff; 
+            margin-bottom: -3px;
+            color: #000; 
+            outline: none;
+        }
+
+        /* Disabled Tab Button Styling */
+        .tab-button[disabled] {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #e9e9e9;
+            color: #999;
+            border-color: #e0e0e0;
+        }
+
+        /* Sub-Tab Navigation */
+        .sub-tab-nav {
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 25px;
+            margin-top: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+        }
+        .sub-tab-button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            font-size: 13px;
+            font-weight: bold;
+            color: #666;
+            border-radius: 3px 3px 0 0;
+            transition: background-color 0.2s;
+        }
+        .sub-tab-button:hover {
+            background-color: #eee;
+        }
+        
+        .sub-tab-button[aria-selected="true"] {
+            background-color: #fff;
+            border-color: #ddd;
+            border-bottom: 2px solid #fff;
+            margin-bottom: -1px;
+            color: #84BD00;
+            border-top: 3px solid #84BD00;
+        }
+
+        /* Mode Selector */
+        .mode-selector {
+            background-color: #f0f0f0;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 30px;
+            border-left: 5px solid #84BD00;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .mode-selector p {
+            margin: 0;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .mode-toggle-btn {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .mode-toggle-btn:hover {
+            background-color: #555;
+        }
+        .mode-toggle-btn[aria-pressed="true"] {
+            background-color: #84BD00;
+            color: #000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Content Sections Visibility Engine */
+        .tab-content, .sub-tab-content, .head-mode-content {
+            display: none; 
+        }
+        .tab-content[aria-hidden="false"], 
+        .sub-tab-content[aria-hidden="false"],
+        .head-mode-content[aria-hidden="false"] {
+            display: block; 
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section {
+            margin-bottom: 50px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        h1, h2, h3, h4, p, ul, ol {
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            border-left: 5px solid #84BD00;
+            padding-left: 15px;
+            color: #000;
+            margin-top: 40px;
+            font-size: 1.8em;
+            font-weight: 600;
+        }
+
+        h3 {
+            color: #333; 
+            margin-top: 30px;
+            font-size: 1.4em;
+            font-weight: 600;
+        }
+        
+        h4 {
+            font-weight: bold;
+            color: #84BD00;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+        
+        /* Spec Tables & Responsiveness */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .spec-table {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            background-color: #fafafa;
+            font-size: 0.9em;
+            border-collapse: collapse;
+        }
+        .spec-table th {
+            background-color: #333;
+            color: #fff;
+            border-bottom: 4px solid #84BD00;
+            padding: 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .spec-table td {
+            border-bottom: 1px solid #e0e0e0;
+            padding: 8px 10px;
+        }
+        .spec-table tr:nth-child(even) {
+            background-color: #f8f8f8;
+        }
+
+        p {
+            text-align: justify;
+            color: #444;
+        }
+
+        ul, ol {
+            padding-left: 30px;
+            color: #444;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        pre {
+            background-color: #2b2b2b;
+            border: 1px solid #444;
+            padding: 20px;
+            border-radius: 4px;
+            font-family: "Consolas", "Monaco", monospace;
+            white-space: pre-wrap;
+            font-size: 0.95em;
+            color: #f8f8f2;
+            border-left: 5px solid #84BD00;
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+        
+        code {
+             font-family: "Consolas", "Monaco", monospace;
+             font-size: 1em;
+             background-color: rgba(132, 189, 0, 0.1);
+             padding: 2px 4px;
+             border-radius: 3px;
+             color: #333;
+        }
+        
+        pre code {
+            background-color: transparent;
+            color: inherit;
+            padding: 0;
+        }
+
+        .two-column-list {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+        .two-column-list > div {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .alert-box {
+            background-color: #fff;
+            border: 1px solid #84BD00;
+            border-left-width: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+<header class="page-header">
+    <h1 class="header-title">Heidenhain 640 Post-Processor Guide (TARUS)</h1>
+    <!-- Fallback if image is missing -->
+    <img src="TARUS_Icon Reversed.png" alt="TARUS Watermark" class="header-watermark" onerror="this.style.display='none'">
+</header>
+
+<div class="container">
+
+    <main>
+        <!-- Tab Navigation - REORDERED -->
+        <nav class="tab-nav" role="tablist" aria-label="CNC Machine Types">
+            <button class="tab-button" role="tab" aria-selected="true" aria-controls="panel-pmt" id="tab-pmt">TARUS PMT-5 Bridge</button>
+            <button class="tab-button" role="tab" aria-selected="false" aria-controls="panel-tbm" id="tab-tbm" tabindex="-1">TARUS TBM/TBH</button>
+            <button class="tab-button" role="tab" aria-selected="false" aria-controls="panel-dhdm" id="tab-dhdm" tabindex="-1" disabled title="Section Under Construction">TARUS DHDM Gundrill</button>
+            <button class="tab-button" role="tab" aria-selected="false" aria-controls="panel-unimax" id="tab-unimax" tabindex="-1" disabled title="Section Under Construction">TARUS UNIMAX</button>
+        </nav>
+
+        <!-- ====================================================== -->
+        <!-- 1. CONTENT FOR TARUS PMT-5 Bridge Moving Table -->
+        <!-- ====================================================== -->
+        <article id="panel-pmt" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-pmt" aria-hidden="false">
+            
+            <section class="section">
+                <h2>PMT-5 Configuration Selector</h2>
+                <div class="mode-selector">
+                    <p>Select Configuration:</p>
+                    <button class="mode-toggle-btn" aria-pressed="true" data-target="content-pmt-ac-fork" data-group="pmt-heads">AC Fork Head</button>
+                    <button class="mode-toggle-btn" aria-pressed="false" data-target="content-pmt-nutator" data-group="pmt-heads">AC Nutator Head</button>
+                </div>
+            </section>
+
+            <!-- ====================================================== -->
+            <!-- SUB-CONTENT: PMT AC FORK HEAD - DEFAULT -->
+            <!-- ====================================================== -->
+            <div id="content-pmt-ac-fork" class="head-mode-content" aria-hidden="false">
+                <section class="section">
+                    <h2>1. Introduction</h2>
+                    <p>This guide provides the necessary technical specifications for developing a post-processor for the Heidenhain TNC 640 control on the <strong>TARUS PMT-5 (Portal Moving Table)</strong> equipped with an <strong>AC Fork Head</strong>.</p>
+                    <div class="alert-box">
+                        <strong>Exclusive Klartext Programming:</strong> The post-processor must generate standard Heidenhain conversational (<code>.H</code>) code. ISO G-code is NOT to be used. The conversational format allows for much easier mid-program restarts and quick edits right at the machine console.
+                    </div>
+                    <table class="spec-table">
+                        <thead>
+                            <tr><th colspan="2">Machine Configuration</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Type</strong></td><td>Vertical Fork Head (X-Y-Z-A-C)</td></tr>
+                            <tr><td><strong>Controller</strong></td><td>Heidenhain TNC 640</td></tr>
+                            <tr><td><strong>Kinematics</strong></td><td>Right-Hand Rule Compliant</td></tr>
+                            <tr><td><strong>A-Axis</strong></td><td>Rotary around X-axis (Head Rotation)</td></tr>
+                            <tr><td><strong>C-Axis</strong></td><td>Rotary around Z-axis (Head Rotation)</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="section">
+                    <h2>2. Positioning Mode (Machine vs. Part)</h2>
+                    <p>The control operates in two primary coordinate modes. The post-processor must be configured to output code for the "Part Coordinate System" by default.</p>
+                    <ul>
+                        <li><strong>Part Coordinate System (<code>CYCL DEF 247 PRESETTING</code> or <code>CYCL DEF 7.0 DATUM SHIFT</code>):</strong> This is the <strong>default mode for all programs</strong>. All coordinates are interpreted as absolute positions relative to the active work offset.</li>
+                        <li><strong>Machine Coordinate System (<code>M91</code>):</strong> This is the absolute machine position. Moves containing <code>M91</code> ignore all work offsets. This is heavily utilized for non-cutting moves, such as sending the machine to a safe home or tool change position (e.g., <code>L Z+1250 R0 F5080 M91</code>).</li>
+                    </ul>
+                </section>
+
+                <section class="section">
+                    <h2>3. Tool Length Compensation</h2>
+                    <p>The control <strong>automatically applies tool length compensation at all times</strong>. The length and radius values stored in the tool registry are made modal and active immediately upon a tool change (<code>M06 T#</code> or <code>TOOL CALL</code>). There is no separate command to activate or deactivate tool length compensation.</p>
+                </section>
+
+                <section class="section">
+                    <h2>4. Programming Logic & Restrictions</h2>
+                    
+                    <h3>5-Axis Capabilities (Simultaneous & 3+2)</h3>
+                    <p>The AC Fork Head configuration supports <strong>both</strong> fully simultaneous 5-axis continuous machining and 3+2 positional indexing.</p>
+
+                    <h3>Universal TCPM (M128/M129)</h3>
+                    <p><strong>TCPM is critical for maintaining kinematics</strong>. It ensures the control uses the machine's kinematic model to keep the tool tip exactly on the programmed path while the rotary axes move.</p>
+                    <ul>
+                        <li><strong>M128:</strong> Must be activated before any simultaneous 5-axis moves. X, Y, Z coordinates refer to the tool's true cutting point (TCP).</li>
+                        <li><strong>M129:</strong> Deactivate TCPM when no longer needed (e.g., before safe retracts and tool changes).</li>
+                    </ul>
+
+                    <h3>Tarus Specific M-Functions</h3>
+                    <div class="table-responsive">
+                        <table class="spec-table">
+                            <thead><tr><th>Function Detail</th><th>M-Function ON</th><th>M-Function OFF</th></tr></thead>
+                            <tbody>
+                                <tr><td>Through Coolant</td><td>M07</td><td>M09</td></tr>
+                                <tr><td>External Flood Coolant</td><td>M08</td><td>M09</td></tr>
+                                <tr><td>A Axis Clamp</td><td>M64</td><td>M44</td></tr>
+                                <tr><td>C Axis Clamp</td><td>M65</td><td>M45</td></tr>
+                                <tr><td>Chip Conveyor</td><td>M51</td><td>M50</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>5. 3+2 Positional Motion (Crucial Safety Logic)</h2>
+                    <p>When indexing for 3+2 operations, the post-processor <strong>must</strong> ensure all A/C axis rotations are non-cutting moves. The A and C axes will clamp before any subsequent linear cutting moves are executed.</p>
+                    
+                    <h3>Spatial Positioning (PLANE Commands)</h3>
+                    <p>For indexing or locking the tool at an angle, the post must utilize the <code>PLANE</code> functions. For example, <code>PLANE SPATIAL SPA... SPB... SPC... STAY</code> is standard for tilting the working plane, followed later by <code>PLANE RESET STAY</code> to clear it.</p>
+
+                    <p>The post-processor must be configured to follow this exact sequence:</p>
+                    <ol>
+                        <li><strong>Retract:</strong> Retract the tool to a safe Z machine position (e.g., <code>L Z+1250 R0 FMAX M91</code>). Ensure M129 is active.</li>
+                        <li><strong>Rotate:</strong> Output a <code>PLANE SPATIAL</code> definition, followed by a rapid move containing the new A and C angles along with M126 for shortest path (e.g., <code>L A+45 C+90 R0 FMAX M126</code>). The axes will move and clamp.</li>
+                        <li><strong>Reposition:</strong> Output a rapid move with the X, Y, Z coordinates for the start of the cut.</li>
+                        <li><strong>Engage:</strong> Output a feed move to the cutting depth.</li>
+                        <li><strong>Cut:</strong> Perform all 3-axis cutting motion.</li>
+                    </ol>
+                </section>
+
+                <section class="section">
+                    <h2>6. File Structure & Program Format</h2>
+                    
+                    <h3>Program Units (Imperial vs. Metric)</h3>
+                    <p>Heidenhain Klartext requires the unit of measurement to be explicitly declared at the very beginning and very end of the program. The post-processor must be configured with a clean toggle to output either Imperial (Inch) or Metric (MM) based on the programmer's settings.</p>
+                    <ul>
+                        <li><strong>Imperial (Inch):</strong> Use <code>INCH</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] INCH</code> and <code>END PGM [NAME] INCH</code>).</li>
+                        <li><strong>Metric (MM):</strong> Use <code>MM</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] MM</code> and <code>END PGM [NAME] MM</code>).</li>
+                    </ul>
+
+                    <h3>Syntax Formatting</h3>
+                    <ul>
+                        <li><strong>File Extension:</strong> <code>.H</code> (Heidenhain Conversational format).</li>
+                        <li><strong>Block Format:</strong> Each line must begin with a sequential block number (e.g., <code>1</code>, <code>2</code>, <code>3</code>). Do not use ISO <code>N</code> numbers.</li>
+                        <li><strong>One Code Per Line:</strong> Commands must be distinct blocks. Do not attempt to group multiple distinct operational commands on a single line unless syntactically supported by Klartext.</li>
+                        <li><strong>Tool Calls:</strong> Instead of standard T and M6 codes, the post needs to output <code>TOOL CALL</code>, specifying the tool number, the tool axis (usually Z), and the spindle speed (e.g., <code>TOOL CALL 344 Z S7640</code>).</li>
+                        <li><strong>Modal Parameters:</strong> Parameters are modal. However, output active parameters on every motion line to avoid ambiguity. Feed rates are specified directly in the block using <code>F</code> (e.g., <code>F10000</code>, <code>FMAX</code>, or variable feeds like <code>FQ1</code>).</li>
+                        <li><strong>Comments:</strong> Comments are started with a semicolon (<code>;</code>) or an asterisk (<code>*</code>).</li>
+                    </ul>
+
+                    <h4>Required Output Structure Example</h4>
+<pre><code>0 BEGIN PGM PROGRAM_NAME INCH
+1 ; Header Comments (e.g., Tarus Machine, Date, CAM Generated)
+2 * - ACTIVATE PRESET (1)
+3 CYCL DEF 247 PRESETTING ~
+    Q339=+1    ;PRESET NUMBER
+4 PLANE RESET STAY
+5 ; WORKING PLANE RESET
+6 L Z+50 R0 FMAX M91
+7 TOOL CALL 123 Z S5000
+8 L X0 Y0 Z0 A0 C0 R0 FMAX M3 
+9 M128 ; ACTIVATE TCPM FOR SIMULTANEOUS
+10 ; --- Start of Machining Operations ---
+11 L X... Y... Z... A... C... F... ; First 5-axis move 
+12 L X... Y... Z... F... ; Subsequent moves 
+13 L X... Y... Z... A... C... F... 
+14 ; --- End of Machining Operations ---
+15 M129 ; DEACTIVATE TCPM
+16 L Z+50 R0 FMAX M91 ; Final rapid retract
+17 M30 ; Program End and Reset
+18 END PGM PROGRAM_NAME INCH</code></pre>
+                </section>
+
+                <section class="section">
+                    <h2>7. Machine Kinematics & Configuration</h2>
+                    <p><strong>Developer Note:</strong> The values in this section are <strong>examples only and must not be hard-coded</strong>. X, Y, and Z axis travel limits are frequently customized per machine. The CAM developer must verify all travel limits and kinematic values for the specific target machine.</p>
+                    
+                    <h4>Axis Travel Limits (Hard Numbers)</h4>
+                    <ul>
+                        <li><strong>X, Y, Z Min/Max:</strong> (e.g., -1000mm / +1000mm) - <em>Note: These are always custom to the machine.</em></li>
+                        <li><strong>A Min/Max (Tilt):</strong> (e.g., -100.1000° / +100.1000°) - <em>Note: A-axis travel depends on head type.</em></li>
+                        <li><strong>C Min/Max (Rotation):</strong> (e.g., -360.000° / +360.000°)</li>
+                    </ul>
+
+                    <h4>Kinematic Configuration</h4>
+                    <p>The most critical kinematic value required by the post-processor is the "Flange Offset" (also known as "Pivot to Flange" or "Z in A"), which is the distance from the A-axis pivot point to the spindle mounting flange.</p>
+                    <ul>
+                        <li><strong>Flange Offset (Z in A):</strong> (e.g., 250mm)</li>
+                    </ul>
+
+                    <h4>Positional Coordinate Transformation (TCPM/RTCP Logic)</h4>
+                    <p>When a toolpath is started, the move to the start of the program will automatically have the M128 (TCPM) function active for simultaneous moves. This is a point-to-point transformation.</p>
+                    <p>When the post-processor outputs a block with a new 5-axis coordinate (e.g., <code>L X10 Y10 Z5 A45 C90</code>), the control calculates the necessary machine-axis positions for X, Y, and Z to get the tool tip to the exact X10 Y10 Z5 part coordinate, based on the new A45 C90 orientation.</p>
+                    
+                    <div class="alert-box">
+                        <strong>RTCP / Coordinate Output Clarification:</strong> All Klartext programs must be posted with the final machine coordinates for X, Y, Z, A, and C. The post-processor must calculate the kinematic compensations for the head's pivot lengths. The TNC 640 control's M128 function will then automatically apply the active tool length compensation.
+                    </div>
+                </section>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- SUB-CONTENT: PMT AC NUTATOR -->
+            <!-- ====================================================== -->
+            <div id="content-pmt-nutator" class="head-mode-content" aria-hidden="true">
+                
+                <section class="section">
+                    <h2>1. Introduction</h2>
+                    <p>This guide provides the necessary technical specifications for developing a post-processor for the Heidenhain TNC 640 control on the <strong>TARUS PMT-5 (Portal Moving Table)</strong> equipped with an <strong>AC Nutator Head</strong>.</p>
+                    <div class="alert-box">
+                        <strong>Exclusive Klartext Programming:</strong> The post-processor must generate standard Heidenhain conversational (<code>.H</code>) code. ISO G-code is NOT to be used.
+                    </div>
+                    <table class="spec-table">
+                        <thead>
+                            <tr><th colspan="2">Machine Configuration</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Machine Type</strong></td><td>Portal Moving Table (PMT) - 5 Axis</td></tr>
+                            <tr><td><strong>Controller</strong></td><td>Heidenhain TNC 640</td></tr>
+                            <tr><td><strong>Head Configuration</strong></td><td>AC Nutator (Mechanical)</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="section">
+                    <h2>2. Positioning Mode (Machine vs. Part)</h2>
+                    <p>The control operates in two primary coordinate modes. The post-processor must be configured to output code for the "Part Coordinate System" by default.</p>
+                    <ul>
+                        <li><strong>Part Coordinate System (<code>CYCL DEF 247 PRESETTING</code> or <code>CYCL DEF 7.0 DATUM SHIFT</code>):</strong> This is the <strong>default mode for all programs</strong>. All coordinates are interpreted as absolute positions relative to the active work offset.</li>
+                        <li><strong>Machine Coordinate System (<code>M91</code>):</strong> This is the absolute machine position. Moves containing <code>M91</code> ignore all work offsets. This is heavily utilized for non-cutting moves, such as sending the machine to a safe home or tool change position (e.g., <code>L Z+1250 R0 F5080 M91</code>).</li>
+                    </ul>
+                </section>
+
+                <section class="section">
+                    <h2>3. Tool Length Compensation</h2>
+                    <p>The control <strong>automatically applies tool length compensation at all times</strong>. The length and radius values stored in the tool registry are made modal and active immediately upon a tool change (<code>TOOL CALL</code>). There is no separate command to activate or deactivate tool length compensation.</p>
+                </section>
+
+                <section class="section">
+                    <h2>4. Programming Logic & Restrictions</h2>
+                    
+                    <h3>5-Axis Capabilities (3+2 Positional ONLY)</h3>
+                    <p>The AC Nutator Head configuration is mechanically designed for <strong>strictly 3+2 positional 5-axis machining</strong>. It cannot perform continuous simultaneous 5-axis cutting interpolations.</p>
+
+                    <h3>Tarus Specific M-Functions</h3>
+                    <div class="table-responsive">
+                        <table class="spec-table">
+                            <thead><tr><th>Function Detail</th><th>M-Function ON</th><th>M-Function OFF</th></tr></thead>
+                            <tbody>
+                                <tr><td>Through Coolant</td><td>M07</td><td>M09</td></tr>
+                                <tr><td>External Flood Coolant</td><td>M08</td><td>M09</td></tr>
+                                <tr><td>A Axis Clamp</td><td>M64</td><td>M44</td></tr>
+                                <tr><td>C Axis Clamp</td><td>M65</td><td>M45</td></tr>
+                                <tr><td>Chip Conveyor</td><td>M51</td><td>M50</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>5. 3+2 Positional Motion (Crucial Safety Logic)</h2>
+                    <p>All 5-axis motion is <strong>positional (3+2) only</strong>. The post-processor <strong>must</strong> ensure all A/C axis rotations are non-cutting moves. The A and C axes will clamp before any subsequent cutting moves are executed.</p>
+                    
+                    <h3>Spatial Positioning (PLANE Commands)</h3>
+                    <p>For indexing or locking the tool at an angle, the post must utilize the <code>PLANE</code> functions. For example, <code>PLANE SPATIAL SPA... SPB... SPC... STAY</code> is standard for tilting the working plane, followed later by <code>PLANE RESET STAY</code> to clear it.</p>
+                    
+                    <p>Configure the post to follow this exact sequence:</p>
+                    <ol>
+                        <li><strong>Retract:</strong> Retract the tool to a safe Z machine position (e.g., <code>L Z+1250 R0 FMAX M91</code>).</li>
+                        <li><strong>Rotate:</strong> Output a <code>PLANE SPATIAL</code> command followed by a rapid move containing the new A and C angles utilizing shortest path (e.g., <code>L A+45 C+90 R0 FMAX M126</code>). The axes will move and clamp.</li>
+                        <li><strong>Reposition:</strong> Output a rapid move with the X, Y, Z coordinates for the start of the cut.</li>
+                        <li><strong>Engage:</strong> Output a feed move to the cutting depth (e.g., <code>L Z-5 F1000</code>).</li>
+                        <li><strong>Cut:</strong> Perform all 3-axis cutting motion.</li>
+                    </ol>
+                </section>
+
+                <section class="section">
+                    <h2>6. File Structure & Program Format</h2>
+                    
+                    <h3>Program Units (Imperial vs. Metric)</h3>
+                    <p>Heidenhain Klartext requires the unit of measurement to be explicitly declared at the very beginning and very end of the program. The post-processor must be configured with a clean toggle to output either Imperial (Inch) or Metric (MM) based on the programmer's settings.</p>
+                    <ul>
+                        <li><strong>Imperial (Inch):</strong> Use <code>INCH</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] INCH</code>).</li>
+                        <li><strong>Metric (MM):</strong> Use <code>MM</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] MM</code>).</li>
+                    </ul>
+
+                    <h3>Syntax Formatting</h3>
+                    <ul>
+                        <li><strong>File Extension:</strong> <code>.H</code> (Heidenhain Conversational format).</li>
+                        <li><strong>Block Format:</strong> Each line must begin with a sequential block number (e.g., <code>1</code>, <code>2</code>, <code>3</code>).</li>
+                        <li><strong>One Code Per Line:</strong> Commands must be distinct blocks.</li>
+                        <li><strong>Tool Calls:</strong> Instead of standard T and M6 codes, the post needs to output <code>TOOL CALL</code>, specifying the tool number, the tool axis (usually Z), and the spindle speed.</li>
+                        <li><strong>Modal Parameters:</strong> Parameters are modal. Output active parameters on every motion line. Feed rates are specified directly in the block using <code>F</code>.</li>
+                        <li><strong>Comments:</strong> Comments are started with a semicolon (<code>;</code>) or asterisk (<code>*</code>).</li>
+                    </ul>
+
+                    <h4>Required Output Structure Example</h4>
+<pre><code>0 BEGIN PGM PROGRAM_NAME INCH
+1 ; Header Comments (e.g., Tarus Machine, Date)
+2 * - ACTIVATE PRESET (1)
+3 CYCL DEF 247 PRESETTING ~
+    Q339=+1    ;PRESET NUMBER
+4 PLANE RESET STAY
+5 L Z+50 R0 FMAX M91
+6 TOOL CALL 123 Z S5000
+7 L X0 Y0 Z0 A0 C0 R0 FMAX M3
+8 PLANE SPATIAL SPA... SPB... SPC... STAY SEQ- TABLE ROT
+9 L C+... A+... R0 FMAX M126
+10 L X... Y... Z... F...
+...
+98 L Z+50 R0 FMAX M91
+99 PLANE RESET STAY
+100 END PGM PROGRAM_NAME INCH</code></pre>
+                </section>
+
+                <section class="section">
+                    <h2>7. Machine Kinematics & Configuration</h2>
+                    <p><strong>Developer Note:</strong> The values in this section are <strong>examples only and must not be hard-coded</strong>. X, Y, and Z axis travel limits are frequently customized per machine. The CAM developer must verify all travel limits and kinematic values for the specific target machine.</p>
+                    
+                    <h4>Axis Travel Limits (Hard Numbers)</h4>
+                    <ul>
+                        <li><strong>X, Y, Z Min/Max:</strong> (e.g., -1000mm / +1000mm) - <em>Note: These are always custom to the machine.</em></li>
+                        <li><strong>A Min/Max (Tilt):</strong> (e.g., -44.9950° / +44.9950°) - <em>Note: Nutator A-axis may not reach a full 45°.</em></li>
+                        <li><strong>C Min/Max (Rotation):</strong> (e.g., -360.000° / +360.000°)</li>
+                    </ul>
+                </section>
+                
+                <section class="section">
+                    <h2>8. Production Examples (From HyperMill/Tebis)</h2>
+                    <p>Derived directly from production files provided by TARUS. Note the exclusive use of 3+2 positioning functions and Klartext formatting.</p>
+                    
+                    <nav class="sub-tab-nav" role="tablist" aria-label="Example Programs for PMT-5">
+                        <button class="sub-tab-button" role="tab" aria-selected="true" data-target="ex-pmt-mill" data-group="pmt-examples">Contour Milling</button>
+                        <button class="sub-tab-button" role="tab" aria-selected="false" data-target="ex-pmt-rough" data-group="pmt-examples">3D/Opti-Rough</button>
+                        <button class="sub-tab-button" role="tab" aria-selected="false" data-target="ex-pmt-drill" data-group="pmt-examples">Drill & Tap</button>
+                    </nav>
+
+                    <div id="ex-pmt-mill" class="sub-tab-content" role="tabpanel" aria-hidden="false">
+                        <h3>Contour Milling on 3D Model</h3>
+<pre><code>; Example Contour Milling
+77 ; --- files_x\Comment\workplane_comment.txt ---
+78 ; C-180 A0
+79 ; ---
+80 PLANE SPATIAL SPA0 SPB0 SPC0 STAY SEQ+ TABLE ROT
+81 L C+Q122 A+Q120 R0 F MAX M126 ; SHORTER PATH TRAVERSE ON
+82 L X-1.2214 Y-1.9648 R0 F10000
+83 L Z1.25 R0 F10000
+84 
+85 L Z-0.3239 R0 F10000
+86 L Z-0.5739 FQ2
+87 L X-1.5786 Y-2.1711  RL FQ1
+; ... cutting moves ...
+120 L Z1.25 R0 FMAX
+121 PLANE RESET STAY</code></pre>
+                    </div>
+
+                    <div id="ex-pmt-rough" class="sub-tab-content" role="tabpanel" aria-hidden="true">
+                        <h3>3D Optimized Roughing</h3>
+<pre><code>; Example 3D Optimized Roughing
+35 PLANE SPATIAL SPA0 SPB-90 SPC-60 STAY SEQ- TABLE ROT
+36 L C+Q122 A+Q120 R0 F MAX M126
+37 L X-1.2214 Y-1.9648 R0 F10000
+...
+; High point density output for roughing
+3270 L X-1.2719 Y-1.767 Z-1.4449 
+3271 L X-1.2354 Y-1.7928 Z-1.4465 
+3272 L X-1.1692 Y-1.8056 Z-1.4489 
+3273 L X-1.1343 Y-1.785 Z-1.4503 
+...
+3300 M127
+3301 PLANE RESET STAY</code></pre>
+                    </div>
+
+                    <div id="ex-pmt-drill" class="sub-tab-content" role="tabpanel" aria-hidden="true">
+                        <h3>Drilling (Cycle 200) & Tapping (Cycle 207)</h3>
+                        <h4>Drilling</h4>
+<pre><code>74 PLANE SPATIAL SPA0 SPB0 SPC0 STAY SEQ+ TABLE ROT
+75 L C+Q122 A+Q120 R0 F MAX M126 ; SHORTER PATH TRAVERSE ON
+76 L X-1.0966 Y-1.8928 R0 F10000
+77 L Z1.25 R0 F10000
+86 CYCL DEF 200 DRILLING ~
+    Q200=+0.1      ;SET-UP CLEARANCE ~
+    Q201=-1.5      ;DEPTH ~
+    Q206=+10       ;FEED RATE ~
+    Q202=+0.25     ;PLUNGING DEPTH ~
+    Q210=+0        ;DWELL TOP ~
+    Q203=+0        ;SURFACE ~
+    Q204=+2.0      ;2ND SET-UP ~
+    Q211=+0        ;DWELL DEPTH
+87 L Z+0.1 R0 FMAX
+88 L X-1.0966 Y-1.8928 R0 FMAX M99</code></pre>
+
+                        <h4>Rigid Tapping</h4>
+<pre><code>70 PLANE SPATIAL SPA-90 SPB0 SPC90 STAY SEQ- TABLE ROT
+71 L C+Q122 A+Q120 R0 F MAX M126
+72 PLANE RESET STAY
+...
+90 CYCL DEF 207 RIGID TAPPING NEW ~
+    Q200=+0.1      ;SET-UP CLEARANCE ~
+    Q201=-1.0      ;DEPTH OF THREAD ~
+    Q239=+0.0312   ;PITCH (1/32) ~
+    Q203=+0        ;SURFACE COORDINATE ~
+    Q204=+2.0      ;2ND SET-UP CLEARANCE
+91 L Z+0.1 R0 FMAX
+92 L X-4 Y-2.5428 R0 FMAX M99</code></pre>
+                    </div>
+                </section>
+            </div>
+
+            <!-- KLARTEXT / M CODE REFERENCE FOR PMT -->
+            <section class="section">
+                <h2>9. Klartext & M-Code Reference</h2>
+                <div class="two-column-list">
+                    <div>
+                        <h4>M-Codes (TNC 640)</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>M-Code</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>M00</td><td>Program Stop / Spindle Stop / Coolant Off</td></tr>
+                                    <tr><td>M01</td><td>Optional Program Stop</td></tr>
+                                    <tr><td>M02 / M30</td><td>Stop Program / Rewind / Reset Status</td></tr>
+                                    <tr><td>M03</td><td>Spindle ON Clockwise</td></tr>
+                                    <tr><td>M04</td><td>Spindle ON Counter-Clockwise</td></tr>
+                                    <tr><td>M05</td><td>Spindle Stop</td></tr>
+                                    <tr><td>M06</td><td>Tool Change</td></tr>
+                                    <tr><td>M07</td><td>Through Coolant ON</td></tr>
+                                    <tr><td>M08</td><td>External Flood Coolant ON</td></tr>
+                                    <tr><td>M09</td><td>Coolant OFF</td></tr>
+                                    <tr><td>M13</td><td>Spindle CW + Coolant ON</td></tr>
+                                    <tr><td>M14</td><td>Spindle CCW + Coolant ON</td></tr>
+                                    <tr><td>M44/M45</td><td>A/C Axis Unclamp</td></tr>
+                                    <tr><td>M50/M51</td><td>Chip Conveyor OFF/ON</td></tr>
+                                    <tr><td>M64/M65</td><td>A/C Axis Clamp</td></tr>
+                                    <tr><td>M91</td><td>Coordinates ref. to machine datum</td></tr>
+                                    <tr><td>M92</td><td>Coordinates ref. to machine builder datum</td></tr>
+                                    <tr><td>M94</td><td>Reduce rotary display below 360°</td></tr>
+                                    <tr><td>M97</td><td>Machine small contour steps</td></tr>
+                                    <tr><td>M98</td><td>Machine open contours completely</td></tr>
+                                    <tr><td>M99</td><td>Cycle Call (Blockwise)</td></tr>
+                                    <tr><td>M116</td><td>Feed rate on rotary axes (relative to TCP)</td></tr>
+                                    <tr><td>M117</td><td>Reset M116</td></tr>
+                                    <tr><td>M126</td><td>Shortest-path traverse of rotary axes</td></tr>
+                                    <tr><td>M127</td><td>Reset M126</td></tr>
+                                    <tr><td>M128</td><td>TCPM (Maintain Tool Tip Position)</td></tr>
+                                    <tr><td>M129</td><td>Reset M128</td></tr>
+                                    <tr><td>M140</td><td>Retraction in tool-axis direction</td></tr>
+                                    <tr><td>M143</td><td>Delete basic rotation</td></tr>
+                                    <tr><td>M144</td><td>Compensate machine kinematics</td></tr>
+                                    <tr><td>M145</td><td>Reset M144</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Common Klartext Commands</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>Command</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>L</td><td>Linear interpolation (Straight line move)</td></tr>
+                                    <tr><td>C</td><td>Circular interpolation with specific radius</td></tr>
+                                    <tr><td>CC</td><td>Circle Center definition</td></tr>
+                                    <tr><td>CR</td><td>Circular interpolation with defined radius</td></tr>
+                                    <tr><td>CT</td><td>Circular interpolation tangentially</td></tr>
+                                    <tr><td>CHF</td><td>Chamfer definition</td></tr>
+                                    <tr><td>RND</td><td>Corner rounding</td></tr>
+                                    <tr><td>TOOL CALL</td><td>Tool definition, axis, and spindle speed</td></tr>
+                                    <tr><td>CYCL DEF</td><td>Cycle Definition (e.g., drilling, tapping, presetting)</td></tr>
+                                    <tr><td>CYCL CALL</td><td>Call the previously defined cycle</td></tr>
+                                    <tr><td>PLANE SPATIAL</td><td>Define working plane using spatial angles</td></tr>
+                                    <tr><td>PLANE RESET</td><td>Reset the working plane</td></tr>
+                                    <tr><td>FMAX</td><td>Rapid traverse feed rate</td></tr>
+                                    <tr><td>R0 / RL / RR</td><td>Radius Compensation (None, Left, Right)</td></tr>
+                                    <tr><td>LBL</td><td>Label definition for subprogramming</td></tr>
+                                    <tr><td>CALL LBL</td><td>Call a specified subprogram Label</td></tr>
+                                    <tr><td>BLK FORM</td><td>Define the blank form for simulation</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </article>
+
+        <!-- ====================================================== -->
+        <!-- 2. CONTENT FOR TARUS TBM-5 & 5GLC & TBH-5 -->
+        <!-- ====================================================== -->
+        <article id="panel-tbm" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-tbm" aria-hidden="true">
+            
+            <section class="section">
+                <h2>TBM/TBH Configuration Selector</h2>
+                <div class="mode-selector">
+                    <p>Select Configuration:</p>
+                    <button class="mode-toggle-btn" aria-pressed="true" data-target="content-tbm-ac-fork" data-group="tbm-heads">AC Fork Head</button>
+                    <button class="mode-toggle-btn" aria-pressed="false" data-target="content-tbm-nutator" data-group="tbm-heads">AC Nutator Head</button>
+                </div>
+            </section>
+
+            <!-- ====================================================== -->
+            <!-- SUB-CONTENT: TBM AC FORK HEAD - DEFAULT -->
+            <!-- ====================================================== -->
+            <div id="content-tbm-ac-fork" class="head-mode-content" aria-hidden="false">
+                <section class="section">
+                    <h2>1. Introduction</h2>
+                    <p>This guide provides the necessary technical specifications for developing a post-processor for the Heidenhain TNC 640 control on the <strong>TARUS TBM/TBH (Traveling Bridge Machine)</strong> equipped with an <strong>AC Fork Head</strong>.</p>
+                    <div class="alert-box">
+                        <strong>Exclusive Klartext Programming:</strong> The post-processor must generate standard Heidenhain conversational (<code>.H</code>) code. ISO G-code is NOT to be used.
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>2. Positioning Mode (Machine vs. Part)</h2>
+                    <p>The control operates in two primary coordinate modes. The post-processor must be configured to output code for the "Part Coordinate System" by default.</p>
+                    <ul>
+                        <li><strong>Part Coordinate System (<code>CYCL DEF 247 PRESETTING</code>):</strong> This is the <strong>default mode for all programs</strong>. All coordinates are interpreted as absolute positions relative to the active work offset.</li>
+                        <li><strong>Machine Coordinate System (<code>M91</code>):</strong> This is the absolute machine position. Moves containing <code>M91</code> ignore all work offsets. This is only used for non-cutting moves, such as sending the machine to a safe home or tool change position.</li>
+                    </ul>
+                </section>
+
+                <section class="section">
+                    <h2>3. Tool Length Compensation</h2>
+                    <p>The control <strong>automatically applies tool length compensation at all times</strong>. The length and radius values stored in the tool registry are made modal and active immediately upon a tool change (<code>TOOL CALL</code>). There is no separate command to activate or deactivate tool length compensation.</p>
+                </section>
+
+                <section class="section">
+                    <h2>4. Programming Logic & Restrictions</h2>
+                    
+                    <h3>5-Axis Capabilities (Simultaneous & 3+2)</h3>
+                    <p>The AC Fork Head configuration supports <strong>both</strong> fully simultaneous 5-axis continuous machining and 3+2 positional indexing.</p>
+
+                    <h3>Universal TCPM (M128/M129)</h3>
+                    <p><strong>TCPM is mandatory for ALL toolpath types</strong> (3-axis, 3+2 axis, and simultaneous 5-axis) to correctly manage tool tip kinematics.</p>
+                    <ul>
+                        <li><strong>M128:</strong> Must be activated before any simultaneous 5-axis moves. X, Y, Z coordinates refer to the tool's true cutting point (TCP).</li>
+                        <li><strong>M129:</strong> Deactivate TCPM when no longer needed.</li>
+                    </ul>
+
+                    <h3>Tarus Specific M-Functions</h3>
+                    <div class="table-responsive">
+                        <table class="spec-table">
+                            <thead><tr><th>Function Detail</th><th>M-Function ON</th><th>M-Function OFF</th></tr></thead>
+                            <tbody>
+                                <tr><td>Through Coolant</td><td>M07</td><td>M09</td></tr>
+                                <tr><td>External Flood Coolant</td><td>M08</td><td>M09</td></tr>
+                                <tr><td>A Axis Clamp</td><td>M64</td><td>M44</td></tr>
+                                <tr><td>C Axis Clamp</td><td>M65</td><td>M45</td></tr>
+                                <tr><td>Chip Conveyor</td><td>M51</td><td>M50</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>5. 3+2 Positional Motion (Crucial Safety Logic)</h2>
+                    <p>All 5-axis motion is <strong>positional (3+2) only</strong> until continuous simultaneous cuts are commanded. The post-processor <strong>must</strong> ensure all A/C axis rotations are non-cutting moves. The A and C axes will clamp before any subsequent linear cutting moves are executed.</p>
+                    <p>Configure the post to follow this exact sequence:</p>
+                    <ol>
+                        <li><strong>Retract:</strong> Retract the tool to a safe Z position. Due to the large Z-travel on Gantry machines, the TNC 640 also provides <code>M140</code> for tool-axis retraction (e.g., <code>M140 MB MAX</code>).</li>
+                        <li><strong>Rotate:</strong> Output a <code>PLANE SPATIAL</code> definition and a rapid move containing the new A and C angles along with M126 for shortest path (e.g., <code>L A+45 C+90 R0 FMAX M126</code>). The axes will move and clamp.</li>
+                        <li><strong>Reposition:</strong> Output a rapid move with the X, Y, Z coordinates for the start of the cut.</li>
+                        <li><strong>Engage:</strong> Output a feed move to the cutting depth.</li>
+                        <li><strong>Cut:</strong> Perform all 3-axis cutting motion.</li>
+                    </ol>
+                </section>
+
+                <section class="section">
+                    <h2>6. File Structure & Program Format</h2>
+
+                    <h3>Program Units (Imperial vs. Metric)</h3>
+                    <p>Heidenhain Klartext requires the unit of measurement to be explicitly declared at the very beginning and very end of the program. The post-processor must be configured with a clean toggle to output either Imperial (Inch) or Metric (MM) based on the programmer's settings.</p>
+                    <ul>
+                        <li><strong>Imperial (Inch):</strong> Use <code>INCH</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] INCH</code>).</li>
+                        <li><strong>Metric (MM):</strong> Use <code>MM</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] MM</code>).</li>
+                    </ul>
+
+                    <h3>Syntax Formatting</h3>
+                    <ul>
+                        <li><strong>File Extension:</strong> <code>.H</code> (Heidenhain Conversational).</li>
+                        <li><strong>Block Format:</strong> Each line must begin with a sequential block number.</li>
+                        <li><strong>One Code Per Line:</strong> Commands must be distinct blocks.</li>
+                    </ul>
+
+                    <h4>Required Output Structure Example</h4>
+<pre><code>0 BEGIN PGM TBM_PART INCH
+1 ; Header Comments (e.g., Tarus Machine, Date)
+2 BLK FORM 0.1 Z X+... Y+... Z+...
+3 BLK FORM 0.2 X+... Y+... Z+...
+4 TOOL CALL 123 Z S5000
+5 L X0 Y0 Z0 A0 C0 R0 FMAX M3
+6 M128 ; ACTIVATE TCPM FOR ALL SUBSEQUENT MOVES
+7 ; --- Start of Machining Operations ---
+8 L X... Y... Z... A... C... F... 
+9 L X... Y... Z... F... 
+10 L X... Y... Z... A... C... F... 
+11 ; --- End of Machining Operations ---
+12 M129 ; DEACTIVATE TCPM
+13 M140 MB MAX ; Safe rapid retract for Gantry
+14 STOP M30
+15 END PGM TBM_PART INCH</code></pre>
+                </section>
+
+                <section class="section">
+                    <h2>7. Machine Kinematics & Configuration</h2>
+                    <p><strong>Developer Note:</strong> The values in this section are <strong>examples only and must not be hard-coded</strong>. X, Y, and Z axis travel limits are frequently customized per machine.</p>
+                    
+                    <h4>Axis Travel Limits (Hard Numbers)</h4>
+                    <ul>
+                        <li><strong>X, Y, Z Min/Max:</strong> (e.g., -1000mm / +1000mm) - <em>Note: These are always custom to the machine.</em></li>
+                        <li><strong>A Min/Max (Tilt):</strong> (e.g., -100.1000° / +100.1000°) - <em>Note: A-axis travel depends on head type.</em></li>
+                        <li><strong>C Min/Max (Rotation):</strong> (e.g., -360.000° / +360.000°)</li>
+                    </ul>
+
+                    <h4>Kinematic Configuration</h4>
+                    <p>The most critical kinematic value required by the post-processor is the "Flange Offset" (also known as "Pivot to Flange" or "Z in A"), which is the distance from the A-axis pivot point to the spindle mounting flange.</p>
+                    <ul>
+                        <li><strong>Flange Offset (Z in A):</strong> (e.g., 250mm)</li>
+                    </ul>
+                </section>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- SUB-CONTENT: TBM AC NUTATOR -->
+            <!-- ====================================================== -->
+            <div id="content-tbm-nutator" class="head-mode-content" aria-hidden="true">
+                
+                <section class="section">
+                    <h2>1. Introduction</h2>
+                    <p>This guide provides the necessary technical specifications for developing a post-processor for the Heidenhain TNC 640 control on the <strong>TARUS TBM/TBH (Traveling Bridge Machine)</strong> equipped with an <strong>AC Nutator Head</strong>.</p>
+                    <div class="alert-box">
+                        <strong>Exclusive Klartext Programming:</strong> The post-processor must generate standard Heidenhain conversational (<code>.H</code>) code. ISO G-code is NOT to be used.
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>2. Positioning Mode (Machine vs. Part)</h2>
+                    <p>The control operates in two primary coordinate modes. The post-processor must be configured to output code for the "Part Coordinate System" by default.</p>
+                    <ul>
+                        <li><strong>Part Coordinate System (<code>CYCL DEF 247 PRESETTING</code>):</strong> This is the <strong>default mode for all programs</strong>. All coordinates are interpreted as absolute positions relative to the active work offset.</li>
+                        <li><strong>Machine Coordinate System (<code>M91</code>):</strong> This is the absolute machine position. Moves containing <code>M91</code> ignore all work offsets.</li>
+                    </ul>
+                </section>
+
+                <section class="section">
+                    <h2>3. Tool Length Compensation</h2>
+                    <p>The control <strong>automatically applies tool length compensation at all times</strong>. The length and radius values stored in the tool registry are made modal and active immediately upon a tool change (<code>TOOL CALL</code>).</p>
+                </section>
+
+                <section class="section">
+                    <h2>4. Programming Logic & Restrictions</h2>
+                    
+                    <h3>5-Axis Capabilities (3+2 Positional ONLY)</h3>
+                    <p>The AC Nutator Head configuration is mechanically designed for <strong>strictly 3+2 positional 5-axis machining</strong>. It cannot perform continuous simultaneous 5-axis cutting interpolations.</p>
+
+                    <h3>Spatial Positioning (PLANE Commands)</h3>
+                    <p>For indexing or locking the tool at an angle, the post must utilize the <code>PLANE</code> functions. For example, <code>PLANE SPATIAL SPA... SPB... SPC... STAY</code> is standard for tilting the working plane, followed later by <code>PLANE RESET STAY</code> to clear it.</p>
+
+                    <h3>Tarus Specific M-Functions</h3>
+                    <div class="table-responsive">
+                        <table class="spec-table">
+                            <thead><tr><th>Function Detail</th><th>M-Function ON</th><th>M-Function OFF</th></tr></thead>
+                            <tbody>
+                                <tr><td>Through Coolant</td><td>M07</td><td>M09</td></tr>
+                                <tr><td>External Flood Coolant</td><td>M08</td><td>M09</td></tr>
+                                <tr><td>A Axis Clamp</td><td>M64</td><td>M44</td></tr>
+                                <tr><td>C Axis Clamp</td><td>M65</td><td>M45</td></tr>
+                                <tr><td>Chip Conveyor</td><td>M51</td><td>M50</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>5. 3+2 Positional Motion (Crucial Safety Logic)</h2>
+                    <p>All 5-axis motion is <strong>positional (3+2) only</strong>. The post-processor <strong>must</strong> ensure all A/C axis rotations are non-cutting moves. The A and C axes will clamp before any subsequent cutting moves are executed.</p>
+                    
+                    <p>Configure the post to follow this exact sequence:</p>
+                    <ol>
+                        <li><strong>Retract:</strong> Retract the tool to a safe Z position. Due to the large Z-travel on Gantry machines, the TNC 640 provides <code>M140</code> for tool-axis retraction (e.g., <code>M140 MB MAX</code>).</li>
+                        <li><strong>Rotate:</strong> Output a <code>PLANE SPATIAL</code> definition followed by a rapid move containing the new A and C angles (e.g., <code>L C+... A+... R0 FMAX M126</code>). The axes will move and clamp.</li>
+                        <li><strong>Reposition:</strong> Output a rapid move with the X, Y, Z coordinates for the start of the cut.</li>
+                        <li><strong>Engage:</strong> Output a feed move to the cutting depth.</li>
+                        <li><strong>Cut:</strong> Perform all 3-axis cutting motion.</li>
+                    </ol>
+                </section>
+
+                <section class="section">
+                    <h2>6. File Structure & Program Format</h2>
+                    
+                    <h3>Program Units (Imperial vs. Metric)</h3>
+                    <p>Heidenhain Klartext requires the unit of measurement to be explicitly declared at the very beginning and very end of the program. The post-processor must be configured with a clean toggle to output either Imperial (Inch) or Metric (MM) based on the programmer's settings.</p>
+                    <ul>
+                        <li><strong>Imperial (Inch):</strong> Use <code>INCH</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] INCH</code>).</li>
+                        <li><strong>Metric (MM):</strong> Use <code>MM</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] MM</code>).</li>
+                    </ul>
+
+                    <h3>Syntax Formatting</h3>
+                    <ul>
+                        <li><strong>File Extension:</strong> <code>.H</code> (Heidenhain Conversational).</li>
+                        <li><strong>Block Format:</strong> Each line must begin with a sequential block number.</li>
+                        <li><strong>One Code Per Line:</strong> Commands must be distinct blocks.</li>
+                        <li><strong>Tool Calls:</strong> Instead of standard T and M6 codes, the post needs to output <code>TOOL CALL</code>.</li>
+                        <li><strong>Modal Parameters:</strong> All parameters are modal. Output active parameters on every motion line.</li>
+                        <li><strong>Comments:</strong> Comments are started with a semicolon (<code>;</code>) or asterisk (<code>*</code>).</li>
+                    </ul>
+
+                    <h4>Required Output Structure Example</h4>
+<pre><code>0 BEGIN PGM TBM_PART INCH
+1 ; Header Comments / Date / User
+2 BLK FORM 0.1 Z X+... Y+... Z+...
+3 BLK FORM 0.2 X+... Y+... Z+...
+4 TOOL CALL 123 Z S5000
+5 L X0 Y0 Z0 A0 C0 R0 FMAX M3
+6 PLANE SPATIAL SPA... SPB... SPC... STAY SEQ- TABLE ROT
+7 L C+... A+... R0 FMAX M126
+...
+98 M140 MB MAX ; Safe rapid retract
+99 PLANE RESET STAY
+100 END PGM TBM_PART INCH</code></pre>
+                </section>
+
+                <section class="section">
+                    <h2>7. Machine Kinematics & Configuration</h2>
+                    <p><strong>Developer Note:</strong> The values in this section are <strong>examples only and must not be hard-coded</strong>. X, Y, and Z axis travel limits are frequently customized per machine.</p>
+                    
+                    <h4>Axis Travel Limits (Hard Numbers)</h4>
+                    <ul>
+                        <li><strong>X, Y, Z Min/Max:</strong> (e.g., -1000mm / +1000mm)</li>
+                        <li><strong>A Min/Max (Tilt):</strong> (e.g., -44.9950° / +44.9950°)</li>
+                        <li><strong>C Min/Max (Rotation):</strong> (e.g., -360.000° / +360.000°)</li>
+                    </ul>
+                </section>
+            </div>
+
+            <!-- G & M CODE REFERENCE FOR TBM -->
+            <section class="section">
+                <h2>8. Klartext & M-Code Reference</h2>
+                <div class="two-column-list">
+                    <div>
+                        <h4>M-Codes (TNC 640)</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>M-Code</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>M00</td><td>Program Stop / Spindle Stop / Coolant Off</td></tr>
+                                    <tr><td>M01</td><td>Optional Program Stop</td></tr>
+                                    <tr><td>M02 / M30</td><td>Stop Program / Rewind / Reset Status</td></tr>
+                                    <tr><td>M03</td><td>Spindle ON Clockwise</td></tr>
+                                    <tr><td>M04</td><td>Spindle ON Counter-Clockwise</td></tr>
+                                    <tr><td>M05</td><td>Spindle Stop</td></tr>
+                                    <tr><td>M06</td><td>Tool Change</td></tr>
+                                    <tr><td>M07</td><td>Through Coolant ON</td></tr>
+                                    <tr><td>M08</td><td>External Flood Coolant ON</td></tr>
+                                    <tr><td>M09</td><td>Coolant OFF</td></tr>
+                                    <tr><td>M13</td><td>Spindle CW + Coolant ON</td></tr>
+                                    <tr><td>M14</td><td>Spindle CCW + Coolant ON</td></tr>
+                                    <tr><td>M44/M45</td><td>A/C Axis Unclamp</td></tr>
+                                    <tr><td>M50/M51</td><td>Chip Conveyor OFF/ON</td></tr>
+                                    <tr><td>M64/M65</td><td>A/C Axis Clamp</td></tr>
+                                    <tr><td>M91</td><td>Coordinates ref. to machine datum</td></tr>
+                                    <tr><td>M92</td><td>Coordinates ref. to machine builder datum</td></tr>
+                                    <tr><td>M94</td><td>Reduce rotary display below 360°</td></tr>
+                                    <tr><td>M97</td><td>Machine small contour steps</td></tr>
+                                    <tr><td>M98</td><td>Machine open contours completely</td></tr>
+                                    <tr><td>M99</td><td>Cycle Call (Blockwise)</td></tr>
+                                    <tr><td>M116</td><td>Feed rate on rotary axes (relative to TCP)</td></tr>
+                                    <tr><td>M117</td><td>Reset M116</td></tr>
+                                    <tr><td>M126</td><td>Shortest-path traverse of rotary axes</td></tr>
+                                    <tr><td>M127</td><td>Reset M126</td></tr>
+                                    <tr><td>M128</td><td>TCPM (Maintain Tool Tip Position)</td></tr>
+                                    <tr><td>M129</td><td>Reset M128</td></tr>
+                                    <tr><td>M140</td><td>Retraction in tool-axis direction</td></tr>
+                                    <tr><td>M143</td><td>Delete basic rotation</td></tr>
+                                    <tr><td>M144</td><td>Compensate machine kinematics</td></tr>
+                                    <tr><td>M145</td><td>Reset M144</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Common Klartext Commands</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>Command</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>L</td><td>Linear interpolation (Straight line move)</td></tr>
+                                    <tr><td>C</td><td>Circular interpolation with specific radius</td></tr>
+                                    <tr><td>CC</td><td>Circle Center definition</td></tr>
+                                    <tr><td>CR</td><td>Circular interpolation with defined radius</td></tr>
+                                    <tr><td>CT</td><td>Circular interpolation tangentially</td></tr>
+                                    <tr><td>CHF</td><td>Chamfer definition</td></tr>
+                                    <tr><td>RND</td><td>Corner rounding</td></tr>
+                                    <tr><td>TOOL CALL</td><td>Tool definition, axis, and spindle speed</td></tr>
+                                    <tr><td>CYCL DEF</td><td>Cycle Definition (e.g., drilling, tapping, presetting)</td></tr>
+                                    <tr><td>CYCL CALL</td><td>Call the previously defined cycle</td></tr>
+                                    <tr><td>PLANE SPATIAL</td><td>Define working plane using spatial angles</td></tr>
+                                    <tr><td>PLANE RESET</td><td>Reset the working plane</td></tr>
+                                    <tr><td>FMAX</td><td>Rapid traverse feed rate</td></tr>
+                                    <tr><td>R0 / RL / RR</td><td>Radius Compensation (None, Left, Right)</td></tr>
+                                    <tr><td>LBL</td><td>Label definition for subprogramming</td></tr>
+                                    <tr><td>CALL LBL</td><td>Call a specified subprogram Label</td></tr>
+                                    <tr><td>BLK FORM</td><td>Define the blank form for simulation</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </article>
+
+        <!-- ====================================================== -->
+        <!-- 3. CONTENT FOR TARUS DHDM GUNDRILL (LOCKED) -->
+        <!-- ====================================================== -->
+        <article id="panel-dhdm" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-dhdm" aria-hidden="true">
+            <section class="section">
+                <h2>1. Introduction</h2>
+                <p>This section covers post-processor development for the <strong>TARUS DHDM (Deep Hole Drilling Machine)</strong> utilizing the Heidenhain TNC 640 control. This machine is specialized for deep hole drilling applications.</p>
+                <div class="alert-box">
+                    <strong>Exclusive Klartext Programming:</strong> The post-processor must generate standard Heidenhain conversational (<code>.H</code>) code.
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>2. Positioning Mode (Machine vs. Part)</h2>
+                <p>The control operates in two primary coordinate modes. The post-processor must be configured to output code for the "Part Coordinate System" by default.</p>
+                <ul>
+                    <li><strong>Part Coordinate System (<code>CYCL DEF 247 PRESETTING</code>):</strong> This is the <strong>default mode for all programs</strong>. All coordinates are interpreted as absolute positions relative to the active work offset.</li>
+                    <li><strong>Machine Coordinate System (<code>M91</code>):</strong> This is the absolute machine position. Moves containing <code>M91</code> ignore all work offsets. This is only used for non-cutting moves.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>3. Tool Length Compensation</h2>
+                <p>The control <strong>automatically applies tool length compensation at all times</strong>. The length and radius values stored in the tool registry are made modal and active immediately upon a tool change (<code>TOOL CALL</code>). There is no separate command to activate or deactivate tool length compensation.</p>
+            </section>
+
+            <section class="section">
+                <h2>4. Programming Logic & Restrictions</h2>
+                
+                <h3>Deep Hole Drilling Cycles</h3>
+                <p>For DHDM applications, the TNC 640 offers specific drilling cycles. While standard pecking cycles (Cycle 200, 203, 205) are available, single-lip deep hole drilling is often handled by <strong>Cycle 241</strong> (if enabled) or specific user cycles.</p>
+
+                <h3>Universal TCPM (M128/M129)</h3>
+                <p>The post must trigger <code>M128</code> (Tool Center Point Management) before any simultaneous 5-axis cutting or complex tilted interpolation. It must be canceled with <code>M129</code> when finished.</p>
+                
+                <h3>Tarus Specific M-Functions</h3>
+                <div class="table-responsive">
+                    <table class="spec-table">
+                        <thead><tr><th>Function Detail</th><th>M-Function ON</th><th>M-Function OFF</th></tr></thead>
+                        <tbody>
+                            <tr><td>Through Coolant</td><td>M07</td><td>M09</td></tr>
+                            <tr><td>External Flood Coolant</td><td>M08</td><td>M09</td></tr>
+                            <tr><td>A Axis Clamp</td><td>M64</td><td>M44</td></tr>
+                            <tr><td>B/C Axis Clamp</td><td>M65</td><td>M45</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>5. 3+2 Positional Motion (Crucial Safety Logic)</h2>
+                <p>All 5-axis motion is positional (3+2) only until continuous cuts are programmed. The post-processor <strong>must</strong> ensure all A/C (or B) axis rotations are non-cutting moves. Configure the post to follow this exact sequence:</p>
+                <ol>
+                    <li><strong>Retract:</strong> Retract the tool to a safe Z machine position (e.g., <code>L Z+... R0 FMAX M91</code>).</li>
+                    <li><strong>Rotate:</strong> Output a <code>PLANE SPATIAL</code> definition and a rapid move containing the new angles (e.g., <code>L A+... C+... R0 FMAX M126</code>). The axes will move and clamp.</li>
+                    <li><strong>Reposition:</strong> Output a rapid move with the X, Y, Z coordinates for the start of the cut.</li>
+                    <li><strong>Engage:</strong> Output a feed move to the cutting depth.</li>
+                    <li><strong>Cut:</strong> Perform all cutting motion.</li>
+                </ol>
+            </section>
+
+            <section class="section">
+                <h2>6. File Structure & Program Format</h2>
+                
+                <h3>Program Units (Imperial vs. Metric)</h3>
+                <p>Heidenhain Klartext requires the unit of measurement to be explicitly declared at the very beginning and very end of the program. The post-processor must be configured with a clean toggle to output either Imperial (Inch) or Metric (MM) based on the programmer's settings.</p>
+                <ul>
+                    <li><strong>Imperial (Inch):</strong> Use <code>INCH</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] INCH</code>).</li>
+                    <li><strong>Metric (MM):</strong> Use <code>MM</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] MM</code>).</li>
+                </ul>
+
+                <h3>Syntax Formatting</h3>
+                <ul>
+                    <li><strong>File Extension:</strong> <code>.H</code> (Heidenhain Conversational).</li>
+                    <li><strong>Block Format:</strong> Each line must begin with a sequential block number.</li>
+                    <li><strong>One Code Per Line:</strong> Commands must be distinct blocks.</li>
+                </ul>
+
+                <h4>Required Output Structure Example</h4>
+<pre><code>0 BEGIN PGM DHDM_PART INCH
+1 ; Header Comments / Date / User
+2 BLK FORM 0.1 Z X+... Y+... Z+...
+3 BLK FORM 0.2 X+... Y+... Z+...
+4 TOOL CALL 123 Z S5000
+5 L X0 Y0 Z0 A0 B0 R0 FMAX M3
+6 M128 ; ACTIVATE TCPM (If simultaneous)
+7 L X... Y... Z... A... B... F...
+...
+98 M129 ; DEACTIVATE TCPM
+99 END PGM DHDM_PART INCH</code></pre>
+            </section>
+
+            <section class="section">
+                <h2>7. Machine Kinematics & Configuration</h2>
+                <p><strong>Developer Note:</strong> The values in this section are <strong>examples only and must not be hard-coded</strong>. The CAM developer must verify all travel limits and kinematic values for the specific target machine.</p>
+                <div class="table-responsive">
+                    <table class="spec-table">
+                        <thead>
+                            <tr><th>Axis</th><th>Negative Limit</th><th>Positive Limit</th><th>Unit</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>X Axis</td><td>Varies</td><td>Varies</td><td>Metric/Inch</td></tr>
+                            <tr><td>Y Axis</td><td>Varies</td><td>Varies</td><td>Metric/Inch</td></tr>
+                            <tr><td>Z/W Axis</td><td>Varies</td><td>Varies</td><td>Metric/Inch</td></tr>
+                            <tr><td>A Axis</td><td>Varies</td><td>Varies</td><td>Degrees</td></tr>
+                            <tr><td>B Axis</td><td>Varies</td><td>Varies</td><td>Degrees</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>8. Klartext & M Code Reference</h2>
+                <div class="two-column-list">
+                    <div>
+                        <h4>M-Codes (TNC 640)</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>M-Code</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>M00</td><td>Program Stop / Spindle Stop / Coolant Off</td></tr>
+                                    <tr><td>M01</td><td>Optional Program Stop</td></tr>
+                                    <tr><td>M02 / M30</td><td>Stop Program / Rewind / Reset Status</td></tr>
+                                    <tr><td>M03</td><td>Spindle ON Clockwise</td></tr>
+                                    <tr><td>M04</td><td>Spindle ON Counter-Clockwise</td></tr>
+                                    <tr><td>M05</td><td>Spindle Stop</td></tr>
+                                    <tr><td>M06</td><td>Tool Change</td></tr>
+                                    <tr><td>M08</td><td>Coolant ON</td></tr>
+                                    <tr><td>M09</td><td>Coolant OFF</td></tr>
+                                    <tr><td>M13</td><td>Spindle CW + Coolant ON</td></tr>
+                                    <tr><td>M14</td><td>Spindle CCW + Coolant ON</td></tr>
+                                    <tr><td>M91</td><td>Coordinates ref. to machine datum</td></tr>
+                                    <tr><td>M92</td><td>Coordinates ref. to machine builder datum</td></tr>
+                                    <tr><td>M94</td><td>Reduce rotary display below 360°</td></tr>
+                                    <tr><td>M116</td><td>Feed rate on rotary axes (relative to TCP)</td></tr>
+                                    <tr><td>M117</td><td>Reset M116</td></tr>
+                                    <tr><td>M126</td><td>Shortest-path traverse of rotary axes</td></tr>
+                                    <tr><td>M127</td><td>Reset M126</td></tr>
+                                    <tr><td>M128</td><td>TCPM (Maintain Tool Tip Position)</td></tr>
+                                    <tr><td>M129</td><td>Reset M128</td></tr>
+                                    <tr><td>M140</td><td>Retraction in tool-axis direction</td></tr>
+                                    <tr><td>M143</td><td>Delete basic rotation</td></tr>
+                                    <tr><td>M144</td><td>Compensate machine kinematics</td></tr>
+                                    <tr><td>M145</td><td>Reset M144</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Common Klartext Commands</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>Command</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>L</td><td>Linear interpolation (Straight line move)</td></tr>
+                                    <tr><td>C</td><td>Circular interpolation with specific radius</td></tr>
+                                    <tr><td>CC</td><td>Circle Center definition</td></tr>
+                                    <tr><td>CR</td><td>Circular interpolation with defined radius</td></tr>
+                                    <tr><td>CT</td><td>Circular interpolation tangentially</td></tr>
+                                    <tr><td>CHF</td><td>Chamfer definition</td></tr>
+                                    <tr><td>RND</td><td>Corner rounding</td></tr>
+                                    <tr><td>TOOL CALL</td><td>Tool definition, axis, and spindle speed</td></tr>
+                                    <tr><td>CYCL DEF</td><td>Cycle Definition (e.g., drilling, tapping, presetting)</td></tr>
+                                    <tr><td>CYCL CALL</td><td>Call the previously defined cycle</td></tr>
+                                    <tr><td>PLANE SPATIAL</td><td>Define working plane using spatial angles</td></tr>
+                                    <tr><td>PLANE RESET</td><td>Reset the working plane</td></tr>
+                                    <tr><td>FMAX</td><td>Rapid traverse feed rate</td></tr>
+                                    <tr><td>R0 / RL / RR</td><td>Radius Compensation (None, Left, Right)</td></tr>
+                                    <tr><td>LBL</td><td>Label definition for subprogramming</td></tr>
+                                    <tr><td>CALL LBL</td><td>Call a specified subprogram Label</td></tr>
+                                    <tr><td>BLK FORM</td><td>Define the blank form for simulation</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </article>
+
+        <!-- ====================================================== -->
+        <!-- 4. CONTENT FOR TARUS UNIMAX 1600 & 1000 XL (LOCKED)-->
+        <!-- ====================================================== -->
+        <article id="panel-unimax" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-unimax" aria-hidden="true">
+            <section class="section">
+                <h2>1. Introduction</h2>
+                <p>This guide provides the necessary technical specifications for developing a post-processor for the Heidenhain TNC 640 control on the <strong>TARUS UNIMAX (1600 & 1000 XL)</strong> Universal Machining Centers.</p>
+                <div class="alert-box">
+                    <strong>Exclusive Klartext Programming:</strong> The post-processor must generate standard Heidenhain conversational (<code>.H</code>) code.
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>2. Positioning Mode (Machine vs. Part)</h2>
+                <p>The control operates in two primary coordinate modes. The post-processor must be configured to output code for the "Part Coordinate System" by default.</p>
+                <ul>
+                    <li><strong>Part Coordinate System (<code>CYCL DEF 247 PRESETTING</code>):</strong> This is the <strong>default mode for all programs</strong>. All coordinates are interpreted as absolute positions relative to the active work offset.</li>
+                    <li><strong>Machine Coordinate System (<code>M91</code>):</strong> This is the absolute machine position. Moves containing <code>M91</code> ignore all work offsets. This is only used for non-cutting moves.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>3. Tool Length Compensation</h2>
+                <p>The control <strong>automatically applies tool length compensation at all times</strong>. The length and radius values stored in the tool registry are made modal and active immediately upon a tool change (<code>TOOL CALL</code>). There is no separate command to activate or deactivate tool length compensation.</p>
+            </section>
+
+            <section class="section">
+                <h2>4. Programming Logic & Restrictions</h2>
+                
+                <h3>Universal TCPM (M128/M129)</h3>
+                <p>The post must trigger <code>M128</code> (Tool Center Point Management) before any simultaneous 5-axis cutting. This ensures the control uses the machine's kinematic model to keep the tool tip exactly on the programmed path while the rotary axes move. It must be canceled with <code>M129</code> when finished.</p>
+                
+                <h3>Advanced Motion Control</h3>
+                <ul>
+                    <li><strong>M116:</strong> The TNC interprets the feed rate in mm/min (or inch/min) relative to the tool tip.</li>
+                    <li><strong>M126:</strong> Shortest Path Traverse. Enable the control to take the shortest path across the 360° modulus for rotary axes.</li>
+                </ul>
+
+                <h3>Tarus Specific M-Functions</h3>
+                <div class="table-responsive">
+                    <table class="spec-table">
+                        <thead><tr><th>Function Detail</th><th>M-Function ON</th><th>M-Function OFF</th></tr></thead>
+                        <tbody>
+                            <tr><td>Through Coolant</td><td>M07</td><td>M09</td></tr>
+                            <tr><td>External Flood Coolant</td><td>M08</td><td>M09</td></tr>
+                            <tr><td>A Axis Clamp</td><td>M64</td><td>M44</td></tr>
+                            <tr><td>C/B Axis Clamp</td><td>M65</td><td>M45</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>5. 3+2 Positional Motion (Crucial Safety Logic)</h2>
+                <p>All 5-axis motion is positional (3+2) only until M128 is called. The post-processor <strong>must</strong> ensure all A/C axis rotations are non-cutting moves. The axes will clamp before any subsequent cutting moves are executed. Configure the post to follow this exact sequence:</p>
+                <ol>
+                    <li><strong>Retract:</strong> Retract the tool to a safe Z position (e.g., using <code>M91</code>).</li>
+                    <li><strong>Rotate:</strong> Output a <code>PLANE SPATIAL</code> definition and a rapid move containing the new A and C angles along with <code>M126</code>. The axes will move and clamp.</li>
+                    <li><strong>Reposition:</strong> Output a rapid move with the X, Y, Z coordinates for the start of the cut.</li>
+                    <li><strong>Engage:</strong> Output a feed move to the cutting depth.</li>
+                    <li><strong>Cut:</strong> Perform all 3-axis cutting motion.</li>
+                </ol>
+            </section>
+
+            <section class="section">
+                <h2>6. File Structure & Program Format</h2>
+                
+                <h3>Program Units (Imperial vs. Metric)</h3>
+                <p>Heidenhain Klartext requires the unit of measurement to be explicitly declared at the very beginning and very end of the program. The post-processor must be configured with a clean toggle to output either Imperial (Inch) or Metric (MM) based on the programmer's settings.</p>
+                <ul>
+                    <li><strong>Imperial (Inch):</strong> Use <code>INCH</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] INCH</code>).</li>
+                    <li><strong>Metric (MM):</strong> Use <code>MM</code> in the header/footer (e.g., <code>BEGIN PGM [NAME] MM</code>).</li>
+                </ul>
+
+                <h3>Syntax Formatting</h3>
+                <ul>
+                    <li><strong>File Extension:</strong> <code>.H</code> (Heidenhain Conversational).</li>
+                    <li><strong>Block Format:</strong> Each line must begin with a sequential block number.</li>
+                    <li><strong>One Code Per Line:</strong> Commands must be distinct blocks.</li>
+                </ul>
+
+                <h4>Required Output Structure Example</h4>
+<pre><code>0 BEGIN PGM UNIMAX_PART INCH
+1 ; Header Comments / Date / User
+2 BLK FORM 0.1 Z X+... Y+... Z+...
+3 BLK FORM 0.2 X+... Y+... Z+...
+4 TOOL CALL 123 Z S5000
+5 L X0 Y0 Z0 A0 C0 R0 FMAX M3
+6 M128 ; ACTIVATE TCPM (If simultaneous)
+7 L X... Y... Z... A... C... F...
+...
+98 M129 ; DEACTIVATE TCPM
+99 END PGM UNIMAX_PART INCH</code></pre>
+            </section>
+
+            <section class="section">
+                <h2>7. Machine Kinematics & Configuration</h2>
+                <p><strong>Developer Note:</strong> The values in this section are <strong>examples only and must not be hard-coded</strong>. X, Y, and Z axis travel limits are frequently customized per machine. The CAM developer must verify all travel limits and kinematic values for the specific target machine.</p>
+                <div class="table-responsive">
+                    <table class="spec-table">
+                        <thead>
+                            <tr><th>Axis</th><th>Negative Limit</th><th>Positive Limit</th><th>Unit</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>X Axis</td><td>Varies</td><td>Varies</td><td>Metric/Inch</td></tr>
+                            <tr><td>Y Axis</td><td>Varies</td><td>Varies</td><td>Metric/Inch</td></tr>
+                            <tr><td>Z Axis</td><td>Varies</td><td>Varies</td><td>Metric/Inch</td></tr>
+                            <tr><td>A Axis</td><td>Varies</td><td>Varies</td><td>Degrees</td></tr>
+                            <tr><td>C/B Axis</td><td>-360.000°</td><td>+360.000°</td><td>Degrees</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>8. Klartext & M Code Reference</h2>
+                <div class="two-column-list">
+                    <div>
+                        <h4>M-Codes (TNC 640)</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>M-Code</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>M00</td><td>Program Stop / Spindle Stop / Coolant Off</td></tr>
+                                    <tr><td>M01</td><td>Optional Program Stop</td></tr>
+                                    <tr><td>M02 / M30</td><td>Stop Program / Rewind / Reset Status</td></tr>
+                                    <tr><td>M03</td><td>Spindle ON Clockwise</td></tr>
+                                    <tr><td>M04</td><td>Spindle ON Counter-Clockwise</td></tr>
+                                    <tr><td>M05</td><td>Spindle Stop</td></tr>
+                                    <tr><td>M06</td><td>Tool Change</td></tr>
+                                    <tr><td>M08</td><td>Coolant ON</td></tr>
+                                    <tr><td>M09</td><td>Coolant OFF</td></tr>
+                                    <tr><td>M13</td><td>Spindle CW + Coolant ON</td></tr>
+                                    <tr><td>M14</td><td>Spindle CCW + Coolant ON</td></tr>
+                                    <tr><td>M91</td><td>Coordinates ref. to machine datum</td></tr>
+                                    <tr><td>M92</td><td>Coordinates ref. to machine builder datum</td></tr>
+                                    <tr><td>M94</td><td>Reduce rotary display below 360°</td></tr>
+                                    <tr><td>M97</td><td>Machine small contour steps</td></tr>
+                                    <tr><td>M98</td><td>Machine open contours completely</td></tr>
+                                    <tr><td>M99</td><td>Cycle Call (Blockwise)</td></tr>
+                                    <tr><td>M116</td><td>Feed rate on rotary axes (relative to TCP)</td></tr>
+                                    <tr><td>M117</td><td>Reset M116</td></tr>
+                                    <tr><td>M118</td><td>Superimpose handwheel during run</td></tr>
+                                    <tr><td>M120</td><td>Look Ahead (Radius Comp)</td></tr>
+                                    <tr><td>M124</td><td>Contour Filter</td></tr>
+                                    <tr><td>M126</td><td>Shortest-path traverse (Rotary)</td></tr>
+                                    <tr><td>M127</td><td>Reset M126</td></tr>
+                                    <tr><td>M128</td><td>TCPM (Maintain Tool Tip Position)</td></tr>
+                                    <tr><td>M129</td><td>Reset M128</td></tr>
+                                    <tr><td>M138</td><td>Selection of tilted axes</td></tr>
+                                    <tr><td>M140</td><td>Retraction in tool-axis direction</td></tr>
+                                    <tr><td>M141</td><td>Suppress touch probe monitoring</td></tr>
+                                    <tr><td>M143</td><td>Delete basic rotation</td></tr>
+                                    <tr><td>M144</td><td>Compensate machine kinematics (ACTUAL/NOMINAL)</td></tr>
+                                    <tr><td>M145</td><td>Reset M144</td></tr>
+                                    <tr><td>M148</td><td>Retract tool automatically at NC Stop</td></tr>
+                                    <tr><td>M149</td><td>Reset M148</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Common Klartext Commands</h4>
+                        <div class="table-responsive">
+                            <table class="spec-table">
+                                <thead><tr><th>Command</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>L</td><td>Linear interpolation (Straight line move)</td></tr>
+                                    <tr><td>C</td><td>Circular interpolation with specific radius</td></tr>
+                                    <tr><td>CC</td><td>Circle Center definition</td></tr>
+                                    <tr><td>CR</td><td>Circular interpolation with defined radius</td></tr>
+                                    <tr><td>CT</td><td>Circular interpolation tangentially</td></tr>
+                                    <tr><td>CHF</td><td>Chamfer definition</td></tr>
+                                    <tr><td>RND</td><td>Corner rounding</td></tr>
+                                    <tr><td>TOOL CALL</td><td>Tool definition, axis, and spindle speed</td></tr>
+                                    <tr><td>CYCL DEF</td><td>Cycle Definition (e.g., drilling, tapping, presetting)</td></tr>
+                                    <tr><td>CYCL CALL</td><td>Call the previously defined cycle</td></tr>
+                                    <tr><td>PLANE SPATIAL</td><td>Define working plane using spatial angles</td></tr>
+                                    <tr><td>PLANE RESET</td><td>Reset the working plane</td></tr>
+                                    <tr><td>FMAX</td><td>Rapid traverse feed rate</td></tr>
+                                    <tr><td>R0 / RL / RR</td><td>Radius Compensation (None, Left, Right)</td></tr>
+                                    <tr><td>LBL</td><td>Label definition for subprogramming</td></tr>
+                                    <tr><td>CALL LBL</td><td>Call a specified subprogram Label</td></tr>
+                                    <tr><td>BLK FORM</td><td>Define the blank form for simulation</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </article>
+
+    </main>
+</div> <!-- End Container -->
+
+<footer class="page-footer">
+    Heidenhain TNC 640 Programming Guide for TARUS Machines
+</footer>
+
+    <!-- JavaScript for Bulletproof UI Functionality -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // Reusable function to set up any toggle button group (Main Tabs, Sub-tabs, Mode Selectors)
+            function setupToggleGroup(buttonClass, selectedAttribute) {
+                const buttons = document.querySelectorAll('.' + buttonClass);
+                
+                buttons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const clickedBtn = e.currentTarget;
+
+                        // DO NOT proceed if button is disabled
+                        if (clickedBtn.hasAttribute('disabled')) return;
+                        
+                        // Handle Main Navigation uniquely based on aria-controls
+                        if (buttonClass === 'tab-button') {
+                            const targetId = clickedBtn.getAttribute('aria-controls');
+                            
+                            // Turn off all main tabs
+                            buttons.forEach(b => {
+                                b.setAttribute('aria-selected', 'false');
+                                b.setAttribute('tabindex', '-1');
+                                const panelId = b.getAttribute('aria-controls');
+                                if (panelId) document.getElementById(panelId).setAttribute('aria-hidden', 'true');
+                            });
+                            
+                            // Turn on clicked tab
+                            clickedBtn.setAttribute('aria-selected', 'true');
+                            clickedBtn.removeAttribute('tabindex');
+                            if (targetId) document.getElementById(targetId).setAttribute('aria-hidden', 'false');
+                            return;
+                        }
+
+                        // Handle Grouped Toggles (Sub-tabs and Mode Switchers) via data attributes
+                        const targetId = clickedBtn.getAttribute('data-target');
+                        const groupName = clickedBtn.getAttribute('data-group');
+                        
+                        if (!targetId || !groupName) return;
+
+                        // Find all buttons in the exact same logical group
+                        const groupButtons = document.querySelectorAll(`.${buttonClass}[data-group="${groupName}"]`);
+                        
+                        // Turn them all off and hide their content
+                        groupButtons.forEach(b => {
+                            b.setAttribute(selectedAttribute, 'false');
+                            const tId = b.getAttribute('data-target');
+                            if (tId) {
+                                const panel = document.getElementById(tId);
+                                if (panel) panel.setAttribute('aria-hidden', 'true');
+                            }
+                        });
+
+                        // Turn on the clicked button and show its content
+                        clickedBtn.setAttribute(selectedAttribute, 'true');
+                        const targetPanel = document.getElementById(targetId);
+                        if (targetPanel) targetPanel.setAttribute('aria-hidden', 'false');
+                    });
+                });
+            }
+
+            // Initialize all interactive groups
+            setupToggleGroup('tab-button', 'aria-selected');     // Main Machine Tabs
+            setupToggleGroup('sub-tab-button', 'aria-selected'); // Example Programs Sub-tabs
+            setupToggleGroup('mode-toggle-btn', 'aria-pressed'); // Head Configuration Toggles
+
+            // Main Tab Keyboard Navigation (Left/Right Arrows)
+            const mainTablist = document.querySelector('.tab-nav[role="tablist"]');
+            // Select ONLY tabs that are NOT disabled for keyboard navigation
+            const mainTabs = mainTablist.querySelectorAll('.tab-button[role="tab"]:not([disabled])');
+            
+            mainTablist.addEventListener('keydown', (e) => {
+                let currentTab = document.activeElement;
+                let currentIndex = Array.from(mainTabs).indexOf(currentTab);
+                
+                if (currentIndex === -1) return;
+                
+                let nextIndex;
+                if (e.key === 'ArrowRight') {
+                    nextIndex = (currentIndex + 1) % mainTabs.length;
+                } else if (e.key === 'ArrowLeft') {
+                    nextIndex = (currentIndex - 1 + mainTabs.length) % mainTabs.length;
+                } else { 
+                    return; 
+                }
+                
+                mainTabs[nextIndex].focus();
+                mainTabs[nextIndex].click(); // Trigger the click logic established above
+                e.preventDefault();
+            });
+            
+        });
+    </script>
+
+</body>
+</html>
